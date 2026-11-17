@@ -24,31 +24,44 @@
 
 ## 使い方
 
-1. このリポジトリを clone する
+1. このリポジトリを clone して、中に入る（以後のコマンドはリポジトリ直下で実行）
    ```
    git clone https://github.com/Blackpug-LLM48P/touan-loop.git
+   cd touan-loop
    ```
-2. `skills/` の中の2つのフォルダを、お使いのAIのスキル置き場に入れる
+2. PDFを作る準備をする（Python が必要）
+   ```
+   pip install reportlab
+   ```
+   IPAゴシックも必要です（下の「フォント」）。
+3. 見本を作って、動くことを確かめる
+   ```
+   python3 skills/test-prep-print/scripts/build_print.py examples/print.json out/sample-print.pdf
+   ```
+4. `skills/` の中の2つのフォルダを、お使いのAIのスキル置き場に入れる
    （Claude Code なら `~/.claude/skills/` にコピー）
-3. 答案の写真や範囲表を `data/` に置いて、AIに頼む
+5. 答案の写真や範囲表を `data/` に置いて、AIに頼む
    - 「この範囲の対策プリントを作って」
    - 「この答案を見て、復習プリントを作って」
 
-PDFを作るには Python と reportlab、IPAゴシックが必要です。
-
-```
-pip install reportlab
-```
-
 ### フォント（IPAゴシック）
 
-フォントは同梱していません。[IPAフォントの配布ページ](https://moji.or.jp/ipafont/)から IPAゴシックを入手し、
-`ipagp.ttf` と `ipag.ttf` を `fonts/` に置いてください（`fonts/` は push されません）。
-Ubuntu / Debian なら `sudo apt install fonts-ipafont-gothic` で入ります。
+フォントは同梱していません。次のどれかで用意してください。
+
+- Ubuntu / Debian：`sudo apt install fonts-ipafont-gothic`
+- それ以外：[IPAフォントの配布ページ](https://moji.or.jp/ipafont/)から「IPAフォント 4書体パック」か
+  「ゴシック・Pゴシックパック」を入手し、中の `ipagp.ttf` と `ipag.ttf` を `fonts/` に置く
+- 別の場所に置いたとき：コマンドの最後に `--font-dir フォルダ名` を付ける
+
+フォントが見つからないと、スクリプトはPDFを作らずに止まります。
 
 ## 子どものデータについて
 
-- **`data/` と画像ファイルは `.gitignore` 済みです。** 答案や点数が push されることはありません。
+- `data/` の中身と画像ファイル（jpg・png・heic など）は `.gitignore` で追跡の対象から外してあります。
+  ふつうに `git add` / `git commit` / `git push` するかぎり、答案や点数は外に出ません。
+- ただし `.gitignore` は「うっかり」を防ぐだけです。`git add -f` で無理に追加したものや、
+  画像以外の形式（PDFにした答案など）を `data/` の外に置いたものは防げません。
+  **子どものデータは必ず `data/` に置いてください。**
 - 答案の写真は、氏名・クラス・番号を隠してから渡してください。
 - スキルは、氏名などをプリントや記録に書かない決まりになっています。
 

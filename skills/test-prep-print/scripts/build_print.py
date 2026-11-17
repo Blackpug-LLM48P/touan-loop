@@ -100,27 +100,54 @@ class AnswerBox(Flowable):
 
 
 def validate(data):
-    """作る前に入力を確かめる。問題があれば一覧にして止まる。"""
+    """作る前に入力を確かめる。問題があれば一覧にして止まる。
+
+    必須: title, trend, strategy, questions（各問は id, type, text, answer, explanation）
+    任意: subject, scope
+    """
     errors = []
-    for key in ("title", "trend", "strategy", "questions"):
-        if not data.get(key):
-            errors.append(f"「{key}」がありません")
+    if not isinstance(data, dict):
+        sys.exit("入力に問題があります:\n- 全体が { } の形になっていません")
+    if not isinstance(data.get("title"), str) or not data["title"].strip():
+        errors.append("「title」がありません")
+    for key in ("trend", "strategy"):
+        v = data.get(key)
+        if not isinstance(v, list) or not v or not all(isinstance(x, str) and x.strip() for x in v):
+            errors.append(f"「{key}」は1つ以上の文のリストにしてください")
+    for key in ("subject", "scope"):
+        if key in data and not isinstance(data[key], str):
+            errors.append(f"「{key}」は文字で書いてください")
+    questions = data.get("questions")
+    if not isinstance(questions, list) or not questions:
+        errors.append("「questions」は1問以上のリストにしてください")
+        questions = []
     seen = set()
-    for q in data.get("questions", []):
-        qid = q.get("id", "?")
-        if qid in seen:
-            errors.append(f"問 {qid}: 番号が重なっています")
-        seen.add(qid)
+    for n, q in enumerate(questions, 1):
+        if not isinstance(q, dict):
+            errors.append(f"{n}番目の問題が {{ }} の形になっていません")
+            continue
+        qid = q.get("id")
+        if not isinstance(qid, str) or not qid.strip():
+            errors.append(f"{n}番目の問題: 「id」がありません（文字で書く。例 \"1\"）")
+            label = f"{n}番目"
+        else:
+            label = qid
+            if qid in seen:
+                errors.append(f"問 {qid}: 番号が重なっています")
+            seen.add(qid)
         for key in ("text", "answer", "explanation"):
-            if not q.get(key):
-                errors.append(f"問 {qid}: 「{key}」がありません")
-        if q.get("type") == "essay":
+            if not isinstance(q.get(key), str) or not q[key].strip():
+                errors.append(f"問 {label}: 「{key}」がありません")
+        qtype = q.get("type")
+        if qtype not in ("short", "essay"):
+            errors.append(f"問 {label}: 「type」は short か essay にしてください（今の値: {qtype!r}）")
+        elif qtype == "essay":
             chars = q.get("chars")
-            if not isinstance(chars, int) or chars <= 0:
-                errors.append(f"問 {qid}: 記述問題には字数（chars）が必要です")
-            elif len(q.get("answer", "")) > chars:
+            if not isinstance(chars, int) or isinstance(chars, bool) or chars <= 0:
+                errors.append(f"問 {label}: 記述問題には字数（chars）が必要です")
+            elif isinstance(q.get("answer"), str) and len(q["answer"]) > chars:
                 errors.append(
-                    f"問 {qid}: 模範解答が {len(q['answer'])} 字で、マス目の {chars} 字を超えています"
+                    f"問 {label}: 模範解答が {len(q['answer'])} 字で、マス目の {chars} 字を超えています"
                 )
     if errors:
         sys.exit("入力に問題があります:\n- " + "\n- ".join(errors))
@@ -143,7 +170,8 @@ def build(data, out_path):
 
     story = [para(data["title"], title)]
     info = "　".join(x for x in (data.get("subject"), data.get("scope")) if x)
-    story.append(para(f"{info}　／　＿＿月＿＿日　／　名前＿＿＿＿＿＿＿＿＿＿", meta))
+    head_line = "＿＿月＿＿日　／　名前＿＿＿＿＿＿＿＿＿＿"
+    story.append(para(f"{info}　／　{head_line}" if info else head_line, meta))
 
     story.append(para("1　傾向の解説", head))
     story += [para(f"・{t}", item) for t in data["trend"]]
