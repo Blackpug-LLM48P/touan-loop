@@ -1,0 +1,18 @@
+{
+  "subject": "理科",
+  "total": {"max": 20, "got": 9},
+  "questions": [
+    {"q": "1(1)", "read": {"status": "read", "text": "密度"}, "score": {"max": 2, "got": 2},
+     "correct": "密度", "cause": {"status": "confirmed", "tag": null, "text": null}},
+    {"q": "1(2)", "read": {"status": "read", "text": "2.7"}, "score": {"max": 4, "got": 2},
+     "correct": "2.7 g/cm³", "cause": {"status": "confirmed", "tag": "condition", "text": "単位を書いていない"}},
+    {"q": "1(3)", "read": {"status": "read", "text": "0.79 g"}, "score": {"max": 4, "got": 0},
+     "correct": "79 g", "cause": {"status": "confirmed", "tag": "procedure", "text": "密度×体積とすべき所を、密度÷体積にしている"}},
+    {"q": "2(1)", "read": {"status": "read", "text": "うく"}, "score": {"max": 2, "got": 2},
+     "correct": "浮く", "cause": {"status": "confirmed", "tag": null, "text": null}},
+    {"q": "2(2)", "read": {"status": "read", "text": "かるいから"}, "score": {"max": 4, "got": 1},
+     "correct": "氷の密度が水の密度より小さいから。", "cause": {"status": "confirmed", "tag": "keyword", "text": "「密度」という語で比べていない"}},
+    {"q": "2(3)", "read": {"status": "unreadable", "text": null}, "score": {"max": 4, "got": 2},
+     "correct": "沈む。鉄の密度が水の密度より大きいから。", "cause": {"status": "unknown", "tag": null, "text": null}}
+  ]
+}

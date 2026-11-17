@@ -1,0 +1,13 @@
+# 子どものデータは絶対に push しない
+data/*
+!data/.gitkeep
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.HEIC
+# フォントは同梱しない（README の手順で各自入手）
+fonts/
+out/
+__pycache__/
+*.pyc
