@@ -14,16 +14,22 @@ description: 中学生・高校生の定期テスト対策プリント、また�
 - **テスト前**：テスト範囲（範囲表の写真や文字、教科書の章名）
 - **テスト後**：`answer-sheet-review` が作った `analysis.json`
 
+## 作業する場所
+
+touan-loop を clone したフォルダの直下で作業する。`data/` と `out/` はそこからの相対パス。
+`data/` が push されないのは、このフォルダの `.gitignore` があるため。別のフォルダで作業しているときは、始める前に親に伝え、touan-loop のフォルダに移ってもらう。
+
 子どものデータは `data/` に置く（このフォルダは push されない）。
 
 ## 手順
 
 1. 入力を読み、何を練習させるプリントかを一文で決めて親に伝える。問題数や難しさの希望がなければ、問題1ページ＋解答1ページ（3〜5問）で作る。
 2. `print.json` を作る（形は下）。
-3. PDFを作る。
+3. PDFを作る。スクリプトは、このスキルのフォルダの `scripts/build_print.py`。
    ```
    python3 skills/test-prep-print/scripts/build_print.py data/print.json out/print.pdf
    ```
+   スキルを別の場所（例：`~/.claude/skills/`）にコピーして使っているときは、スクリプトのパスだけをコピー先のものに替える（例：`~/.claude/skills/test-prep-print/scripts/build_print.py`）。`data/` と `out/` は替えない。
 4. できたPDFを画像にして全ページを見る（例：`pdftoppm -r 80 -png out/print.pdf out/page`）。文字の欠け、はみ出し、マス目の字数を確かめる。
 5. 親に渡す。問題ごとに「何を練習する問題か」を一行で添える。
 
