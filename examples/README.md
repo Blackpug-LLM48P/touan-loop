@@ -6,6 +6,14 @@
 - `print.json`：それをもとにした復習プリントの材料
 - `sample-print.pdf`：`print.json` から作ったプリント
 
+見本のプリントは、4つの型を全部見せるために6問あります（ふだんは3〜5問）。
+
+分析の例を確かめるとき：
+
+```
+python3 skills/answer-sheet-review/scripts/check_analysis.py examples/analysis.json
+```
+
 作り直すとき：
 
 ```
