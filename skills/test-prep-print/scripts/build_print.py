@@ -15,6 +15,7 @@ import os
 import sys
 from xml.sax.saxutils import escape
 
+from reportlab import rl_config
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -22,11 +23,14 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Flowable, PageBreak, Paragraph, SimpleDocTemplate, Spacer
 
-BODY = "IPAPGothic"  # 本文（ipagp.ttf）
-MONO = "IPAGothic"   # 等幅（ipag.ttf）
+# ---- 見た目の決まり ----
+BODY = "IPAPGothic"  # 本文
+MONO = "IPAGothic"   # 等幅（マス目の数字）
+FONT_FILES = {BODY: "ipagp.ttf", MONO: "ipag.ttf"}
 MARGIN = 20 * mm
 CELL = 7 * mm        # マス目1つの大きさ
 PER_ROW = 20         # マス目の1行の字数
+QUESTION_TYPES = ("short", "essay")
 
 FONT_DIRS = [
     "fonts",
@@ -40,20 +44,100 @@ FONT_DIRS = [
 ]
 
 
-def register_fonts(font_dir):
-    dirs = ([font_dir] if font_dir else []) + FONT_DIRS
-    for name, filename in ((BODY, "ipagp.ttf"), (MONO, "ipag.ttf")):
-        for d in dirs:
-            path = os.path.join(d, filename)
-            if os.path.isfile(path):
-                pdfmetrics.registerFont(TTFont(name, path))
-                break
-        else:
-            sys.exit(
+class PrintError(Exception):
+    """プリントを作れない理由を、利用者に見せる文で持つ。"""
+
+
+# ---- フォント ----
+
+def find_font(filename, font_dir=None):
+    """フォントファイルの場所を返す。見つからなければ None。"""
+    for d in ([font_dir] if font_dir else []) + FONT_DIRS:
+        path = os.path.join(d, filename)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def register_fonts(font_dir=None):
+    for name, filename in FONT_FILES.items():
+        path = find_font(filename, font_dir)
+        if path is None:
+            raise PrintError(
                 f"フォント {filename} が見つかりません。"
                 "IPAゴシックを入手して fonts/ に置くか、--font-dir で場所を指定してください。"
             )
+        pdfmetrics.registerFont(TTFont(name, path))
+    # reportlab の既定フォント（Helvetica）をPDFに入れない
+    rl_config.canvas_basefontname = BODY
 
+
+# ---- 入力の確認 ----
+
+def _is_text(value):
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _check_question(n, q, seen):
+    """1問ぶんの問題点を文のリストで返す。"""
+    if not isinstance(q, dict):
+        return [f"{n}番目の問題が {{ }} の形になっていません"]
+    errors = []
+    qid = q.get("id")
+    if _is_text(qid):
+        label = qid
+        if qid in seen:
+            errors.append(f"問 {qid}: 番号が重なっています")
+        seen.add(qid)
+    else:
+        label = f"{n}番目"
+        errors.append(f'{n}番目の問題: 「id」がありません（文字で書く。例 "1"）')
+    for key in ("text", "answer", "explanation"):
+        if not _is_text(q.get(key)):
+            errors.append(f"問 {label}: 「{key}」がありません")
+    qtype = q.get("type")
+    if qtype not in QUESTION_TYPES:
+        errors.append(f"問 {label}: 「type」は short か essay にしてください（今の値: {qtype!r}）")
+    elif qtype == "essay":
+        chars = q.get("chars")
+        if not isinstance(chars, int) or isinstance(chars, bool) or chars <= 0:
+            errors.append(f"問 {label}: 記述問題には字数（chars）が必要です")
+        elif _is_text(q.get("answer")) and len(q["answer"]) > chars:
+            errors.append(
+                f"問 {label}: 模範解答が {len(q['answer'])} 字で、マス目の {chars} 字を超えています"
+            )
+    return errors
+
+
+def validate(data):
+    """入力の問題点を文のリストで返す。空なら問題なし。
+
+    必須: title, trend, strategy, questions（各問は id, type, text, answer, explanation）
+    任意: subject, scope
+    """
+    if not isinstance(data, dict):
+        return ["全体が { } の形になっていません"]
+    errors = []
+    if not _is_text(data.get("title")):
+        errors.append("「title」がありません")
+    for key in ("trend", "strategy"):
+        value = data.get(key)
+        if not isinstance(value, list) or not value or not all(_is_text(x) for x in value):
+            errors.append(f"「{key}」は1つ以上の文のリストにしてください")
+    for key in ("subject", "scope"):
+        if key in data and not isinstance(data[key], str):
+            errors.append(f"「{key}」は文字で書いてください")
+    questions = data.get("questions")
+    if not isinstance(questions, list) or not questions:
+        errors.append("「questions」は1問以上のリストにしてください")
+        return errors
+    seen = set()
+    for n, q in enumerate(questions, 1):
+        errors += _check_question(n, q, seen)
+    return errors
+
+
+# ---- 部品 ----
 
 class MasuGrid(Flowable):
     """記述問題用のマス目。5字ごとに小さな目印を付ける。"""
@@ -99,122 +183,105 @@ class AnswerBox(Flowable):
         c.drawString(1.5 * mm, self.h - 3.5 * mm, "答え")
 
 
-def validate(data):
-    """作る前に入力を確かめる。問題があれば一覧にして止まる。
-
-    必須: title, trend, strategy, questions（各問は id, type, text, answer, explanation）
-    任意: subject, scope
-    """
-    errors = []
-    if not isinstance(data, dict):
-        sys.exit("入力に問題があります:\n- 全体が { } の形になっていません")
-    if not isinstance(data.get("title"), str) or not data["title"].strip():
-        errors.append("「title」がありません")
-    for key in ("trend", "strategy"):
-        v = data.get(key)
-        if not isinstance(v, list) or not v or not all(isinstance(x, str) and x.strip() for x in v):
-            errors.append(f"「{key}」は1つ以上の文のリストにしてください")
-    for key in ("subject", "scope"):
-        if key in data and not isinstance(data[key], str):
-            errors.append(f"「{key}」は文字で書いてください")
-    questions = data.get("questions")
-    if not isinstance(questions, list) or not questions:
-        errors.append("「questions」は1問以上のリストにしてください")
-        questions = []
-    seen = set()
-    for n, q in enumerate(questions, 1):
-        if not isinstance(q, dict):
-            errors.append(f"{n}番目の問題が {{ }} の形になっていません")
-            continue
-        qid = q.get("id")
-        if not isinstance(qid, str) or not qid.strip():
-            errors.append(f"{n}番目の問題: 「id」がありません（文字で書く。例 \"1\"）")
-            label = f"{n}番目"
-        else:
-            label = qid
-            if qid in seen:
-                errors.append(f"問 {qid}: 番号が重なっています")
-            seen.add(qid)
-        for key in ("text", "answer", "explanation"):
-            if not isinstance(q.get(key), str) or not q[key].strip():
-                errors.append(f"問 {label}: 「{key}」がありません")
-        qtype = q.get("type")
-        if qtype not in ("short", "essay"):
-            errors.append(f"問 {label}: 「type」は short か essay にしてください（今の値: {qtype!r}）")
-        elif qtype == "essay":
-            chars = q.get("chars")
-            if not isinstance(chars, int) or isinstance(chars, bool) or chars <= 0:
-                errors.append(f"問 {label}: 記述問題には字数（chars）が必要です")
-            elif isinstance(q.get("answer"), str) and len(q["answer"]) > chars:
-                errors.append(
-                    f"問 {label}: 模範解答が {len(q['answer'])} 字で、マス目の {chars} 字を超えています"
-                )
-    if errors:
-        sys.exit("入力に問題があります:\n- " + "\n- ".join(errors))
+def make_styles():
+    base = dict(fontName=BODY, wordWrap="CJK")
+    body = ParagraphStyle("body", fontSize=10.5, leading=17, **base)
+    return {
+        "title": ParagraphStyle("title", fontSize=16, leading=22, spaceAfter=2 * mm, **base),
+        "meta": ParagraphStyle("meta", fontSize=9, leading=13, spaceAfter=4 * mm, **base),
+        "head": ParagraphStyle("head", fontSize=13, leading=18, spaceBefore=5 * mm,
+                               spaceAfter=2 * mm, **base),
+        "body": body,
+        "item": ParagraphStyle("item", parent=body, leftIndent=5 * mm, firstLineIndent=-5 * mm),
+        "question": ParagraphStyle("question", parent=body, spaceBefore=4 * mm, spaceAfter=2 * mm,
+                                   leftIndent=9 * mm, firstLineIndent=-9 * mm),
+        "indent": ParagraphStyle("indent", parent=body, leftIndent=9 * mm),
+    }
 
 
 def para(text, style):
     return Paragraph(escape(str(text)).replace("\n", "<br/>"), style)
 
 
-def build(data, out_path):
-    base = dict(fontName=BODY, wordWrap="CJK")
-    title = ParagraphStyle("title", fontSize=16, leading=22, spaceAfter=2 * mm, **base)
-    meta = ParagraphStyle("meta", fontSize=9, leading=13, spaceAfter=4 * mm, **base)
-    head = ParagraphStyle("head", fontSize=13, leading=18, spaceBefore=5 * mm, spaceAfter=2 * mm, **base)
-    body = ParagraphStyle("body", fontSize=10.5, leading=17, **base)
-    item = ParagraphStyle("item", parent=body, leftIndent=5 * mm, firstLineIndent=-5 * mm)
-    qtext = ParagraphStyle("qtext", parent=body, spaceBefore=4 * mm, spaceAfter=2 * mm,
-                           leftIndent=9 * mm, firstLineIndent=-9 * mm)
-    indent = ParagraphStyle("indent", parent=body, leftIndent=9 * mm)
+# ---- 組み立て ----
 
-    story = [para(data["title"], title)]
+def header_block(data, st):
     info = "　".join(x for x in (data.get("subject"), data.get("scope")) if x)
-    head_line = "＿＿月＿＿日　／　名前＿＿＿＿＿＿＿＿＿＿"
-    story.append(para(f"{info}　／　{head_line}" if info else head_line, meta))
+    name_line = "＿＿月＿＿日　／　名前＿＿＿＿＿＿＿＿＿＿"
+    return [
+        para(data["title"], st["title"]),
+        para(f"{info}　／　{name_line}" if info else name_line, st["meta"]),
+    ]
 
-    story.append(para("1　傾向の解説", head))
-    story += [para(f"・{t}", item) for t in data["trend"]]
-    story.append(para("2　対策", head))
-    story += [para(f"・{t}", item) for t in data["strategy"]]
 
-    story.append(para("3　問題", head))
-    for q in data["questions"]:
-        story.append(para(f"【{q['id']}】 {q['text']}", qtext))
-        if q.get("type") == "essay":
-            story.append(MasuGrid(q["chars"]))
-        else:
-            story.append(AnswerBox())
+def bullet_section(heading, lines, st):
+    return [para(heading, st["head"])] + [para(f"・{t}", st["item"]) for t in lines]
+
+
+def question_section(questions, st):
+    story = [para("3　問題", st["head"])]
+    for q in questions:
+        story.append(para(f"【{q['id']}】 {q['text']}", st["question"]))
+        story.append(MasuGrid(q["chars"]) if q["type"] == "essay" else AnswerBox())
         story.append(Spacer(1, 2 * mm))
+    return story
 
-    story.append(PageBreak())
-    story.append(para("4　解答と解説", head))
-    for q in data["questions"]:
-        story.append(para(f"【{q['id']}】 答え：{q['answer']}", qtext))
-        story.append(para(q["explanation"], indent))
 
-    def footer(canvas, doc):
-        canvas.setFont(BODY, 8)
-        canvas.drawCentredString(A4[0] / 2, 10 * mm, str(doc.page))
+def answer_section(questions, st):
+    story = [para("4　解答と解説", st["head"])]
+    for q in questions:
+        story.append(para(f"【{q['id']}】 答え：{q['answer']}", st["question"]))
+        story.append(para(q["explanation"], st["indent"]))
+    return story
 
+
+def build_story(data):
+    """並びの決まりはここだけで決める。"""
+    st = make_styles()
+    return (
+        header_block(data, st)
+        + bullet_section("1　傾向の解説", data["trend"], st)
+        + bullet_section("2　対策", data["strategy"], st)
+        + question_section(data["questions"], st)
+        + [PageBreak()]
+        + answer_section(data["questions"], st)
+    )
+
+
+def _page_number(canvas, doc):
+    canvas.setFont(BODY, 8)
+    canvas.drawCentredString(A4[0] / 2, 10 * mm, str(doc.page))
+
+
+def build_pdf(data, out_path, font_dir=None):
+    """確認 → フォント → PDF。問題があれば PrintError。"""
+    errors = validate(data)
+    if errors:
+        raise PrintError("入力に問題があります:\n- " + "\n- ".join(errors))
+    register_fonts(font_dir)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     doc = SimpleDocTemplate(out_path, pagesize=A4, leftMargin=MARGIN, rightMargin=MARGIN,
                             topMargin=MARGIN, bottomMargin=MARGIN, title=data["title"])
-    doc.build(story, onFirstPage=footer, onLaterPages=footer)
+    doc.build(build_story(data), onFirstPage=_page_number, onLaterPages=_page_number)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="print.json から A4 の印刷用プリントを作る")
     ap.add_argument("input", help="print.json")
     ap.add_argument("output", help="出力する PDF")
     ap.add_argument("--font-dir", help="ipagp.ttf と ipag.ttf のあるフォルダ")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
-    with open(args.input, encoding="utf-8") as f:
-        data = json.load(f)
-    validate(data)
-    register_fonts(args.font_dir)
-    build(data, args.output)
+    try:
+        with open(args.input, encoding="utf-8") as f:
+            data = json.load(f)
+        build_pdf(data, args.output, args.font_dir)
+    except PrintError as e:
+        sys.exit(str(e))
+    except FileNotFoundError:
+        sys.exit(f"ファイルが見つかりません: {args.input}")
+    except json.JSONDecodeError as e:
+        sys.exit(f"JSON として読めません: {args.input}（{e.lineno}行目）")
     print(f"作成しました: {args.output}（問題 {len(data['questions'])} 問）")
 
 
