@@ -49,8 +49,9 @@
 フォントは同梱していません。次のどれかで用意してください。
 
 - Ubuntu / Debian：`sudo apt install fonts-ipafont-gothic`
-- それ以外：[IPAフォントの配布ページ](https://moji.or.jp/ipafont/)から「IPAフォント 4書体パック」か
-  「ゴシック・Pゴシックパック」を入手し、中の `ipagp.ttf` と `ipag.ttf` を `fonts/` に置く
+- それ以外：[IPAフォント Ver.003.03 の配布ページ](https://moji.or.jp/ipafont/ipa00303/)から
+  **TTF版**の「4書体パック（IPAfont00303.zip）」を入手し、中の `ipagp.ttf` と `ipag.ttf` を `fonts/` に置く
+  （TTC版のパックは、このスクリプトでは使えません）
 - 別の場所に置いたとき：コマンドの最後に `--font-dir フォルダ名` を付ける
 
 フォントが見つからないと、スクリプトはPDFを作らずに止まります。
@@ -87,6 +88,9 @@
 ```
 python3 -m unittest discover -s skills/test-prep-print/tests -v
 ```
+
+IPAゴシックが見つからない環境では、フォントが要るテスト（組み立てとPDF生成）は飛ばされます。
+全部を走らせるには、先にフォントを用意してください。
 
 ## ライセンス
 

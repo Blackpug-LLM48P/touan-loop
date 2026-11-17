@@ -3,7 +3,9 @@
 リポジトリ直下で:
     python3 -m unittest discover -s skills/test-prep-print/tests -v
 
-PDFを作るテストは、IPAゴシックが見つからない環境では飛ばす（失敗にはしない）。
+IPAゴシックが要るテスト（組み立てとPDF生成）は、フォントが見つからない環境では
+飛ばす（失敗にはしない）。入力の確認とマス目の行数のテストは、フォントなしで動く。
+各テストは自分でフォントを用意するので、実行の順番によらない。
 """
 import copy
 import json
@@ -20,6 +22,7 @@ import build_print as bp  # noqa: E402
 
 FONT_DIR = os.path.join(ROOT, "fonts")
 HAVE_FONTS = all(bp.find_font(f, FONT_DIR) for f in bp.FONT_FILES.values())
+NEED_FONTS = unittest.skipUnless(HAVE_FONTS, "IPAゴシックが見つからないので飛ばす")
 
 
 def plain(flowable):
@@ -100,7 +103,19 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(len(self.errors_after(change)), 3)
 
 
+class GridTest(unittest.TestCase):
+    def test_grid_rows(self):
+        for chars, rows in ((1, 1), (20, 1), (21, 2), (40, 2), (41, 3)):
+            with self.subTest(chars=chars):
+                self.assertEqual(bp.MasuGrid(chars).rows, rows)
+
+
+@NEED_FONTS
 class StoryTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        bp.register_fonts(FONT_DIR)
+
     def test_order_is_fixed(self):
         story = bp.build_story(sample())
         heads = [plain(f) for f in story
@@ -120,11 +135,6 @@ class StoryTest(unittest.TestCase):
         boxes = [f for f in story if isinstance(f, bp.AnswerBox)]
         self.assertEqual(grids, [q["chars"] for q in data["questions"] if q["type"] == "essay"])
         self.assertEqual(len(boxes), sum(q["type"] == "short" for q in data["questions"]))
-
-    def test_grid_rows(self):
-        for chars, rows in ((1, 1), (20, 1), (21, 2), (40, 2), (41, 3)):
-            with self.subTest(chars=chars):
-                self.assertEqual(bp.MasuGrid(chars).rows, rows)
 
 
 class BuildTest(unittest.TestCase):
@@ -148,7 +158,7 @@ class BuildTest(unittest.TestCase):
         finally:
             bp.FONT_DIRS = saved
 
-    @unittest.skipUnless(HAVE_FONTS, "IPAゴシックが見つからないので飛ばす")
+    @NEED_FONTS
     def test_builds_pdf(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = os.path.join(tmp, "sub", "print.pdf")
