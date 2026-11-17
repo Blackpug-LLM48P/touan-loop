@@ -1,11 +1,19 @@
-# 子どものデータは絶対に push しない
+# 子どものデータ置き場。中身は追跡しない
 data/*
 !data/.gitkeep
-*.jpg
-*.jpeg
-*.png
-*.heic
-*.HEIC
+
+# 画像（答案の写真など）。大文字・小文字のどちらの拡張子も対象
+*.[jJ][pP][gG]
+*.[jJ][pP][eE][gG]
+*.[pP][nN][gG]
+*.[hH][eE][iI][cC]
+*.[hH][eE][iI][fF]
+*.[wW][eE][bB][pP]
+*.[tT][iI][fF]
+*.[tT][iI][fF][fF]
+*.[bB][mM][pP]
+*.[gG][iI][fF]
+
 # フォントは同梱しない（README の手順で各自入手）
 fonts/
 out/

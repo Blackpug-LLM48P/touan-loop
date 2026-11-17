@@ -35,6 +35,9 @@ description: 返却された定期テストの答案（写真）を読み、問�
 - 答えが読めなかった問の原因は、確定にしない（`hypothesis` か `unknown`）。
 - 採点記号が読めれば、答えの字が読めなくても採点は記録してよい。
 - 合計が合わないとき、合うように数字を直さない。「合わない」と報告する。
+- 原因を確定（`confirmed`）にしてよいのは、答案に書かれたものが根拠になるときだけ。根拠は `cause.text` に書く（例：答案の式が「7.9÷10」）。
+- 答えの数値だけから計算の間違い方を決めない。途中式が答案にないときは `hypothesis` にする。
+- 満点の問は `cause` を `null` にする。
 - 原因は、答案から言えることだけを書く。性格や努力の話にしない。
 
 ## analysis.json の形
@@ -62,6 +65,7 @@ description: 返却された定期テストの答案（写真）を読み、問�
 }
 ```
 
+- `read.text`：答案に書かれていたもの。途中式があれば式も書き写す
 - `read.status`：`read`（読めた）／`unreadable`（読めなかった）／`parent_confirmed`（親に確かめた）
 - `cause.status`：`confirmed`（確定）／`hypothesis`（仮説）／`unknown`（不明）
 - `cause.tag`：`keyword`（用語）／`question_form`（問われ方の読み違い）／`condition`（条件・単位・字数の見落とし）／`blank`（空欄）／`kanji`（漢字）／`procedure`（手順・計算）／`concept`（理解）
