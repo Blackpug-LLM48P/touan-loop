@@ -64,7 +64,26 @@ class ValidateTest(unittest.TestCase):
         self.assert_one_error(lambda d: d["questions"][0].pop("type"), "「type」")
 
     def test_unknown_type(self):
-        self.assert_one_error(lambda d: d["questions"][0].update(type="choice"), "「type」")
+        self.assert_one_error(lambda d: d["questions"][0].update(type="table"), "「type」")
+
+    def test_choice_needs_choices(self):
+        for bad in (None, [], ["1つだけ"], ["a", ""], "ア", list("1234567")):
+            self.assert_one_error(
+                lambda d, bad=bad: d["questions"][0].update(type="choice", choices=bad, answer="ア"),
+                "選択肢（choices）")
+
+    def test_choice_answer_must_be_a_label_in_range(self):
+        for bad in ("2.7 g/cm³", "ウ", "a"):
+            self.assert_one_error(
+                lambda d, bad=bad: d["questions"][0].update(
+                    type="choice", choices=["2.7", "27"], answer=bad),
+                "記号で書いてください")
+
+    def test_valid_choice_and_calc(self):
+        def change(d):
+            d["questions"][0].update(type="choice", choices=["2.7", "27", "0.37"], answer="ア")
+            d["questions"][1].update(type="calc")
+        self.assertEqual(self.errors_after(change), [])
 
     def test_duplicate_id(self):
         self.assert_one_error(lambda d: d["questions"][1].update(id="1"), "番号が重なっています")
@@ -134,7 +153,21 @@ class StoryTest(unittest.TestCase):
         grids = [f.chars for f in story if isinstance(f, bp.MasuGrid)]
         boxes = [f for f in story if isinstance(f, bp.AnswerBox)]
         self.assertEqual(grids, [q["chars"] for q in data["questions"] if q["type"] == "essay"])
-        self.assertEqual(len(boxes), sum(q["type"] == "short" for q in data["questions"]))
+        works = [f for f in story if isinstance(f, bp.WorkBox)]
+        self.assertEqual(len(boxes), sum(q["type"] != "essay" for q in data["questions"]))
+        self.assertEqual(len(works), sum(q["type"] == "calc" for q in data["questions"]))
+
+    def test_sample_covers_every_type(self):
+        self.assertEqual({q["type"] for q in sample()["questions"]}, set(bp.QUESTION_TYPES))
+
+    def test_choice_shows_labelled_options_and_answer_text(self):
+        data = sample()
+        q = next(q for q in data["questions"] if q["type"] == "choice")
+        texts = [plain(f) for f in bp.build_story(data) if isinstance(f, bp.Paragraph)]
+        for label, choice in zip(bp.CHOICE_LABELS, q["choices"]):
+            self.assertIn(f"{label} {choice}", texts)
+        picked = q["choices"][bp.CHOICE_LABELS.index(q["answer"])]
+        self.assertIn(f"【{q['id']}】 答え：{q['answer']}（{picked}）", texts)
 
 
 class BuildTest(unittest.TestCase):

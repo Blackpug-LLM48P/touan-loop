@@ -2,7 +2,7 @@
 """print.json から、A4 の印刷用プリント（PDF）を作る。
 
 並びは固定：傾向の解説 → 対策 → 問題 → 解答と解説（解答は新しいページから）。
-記述問題には字数ぶんのマス目を付ける。
+記述問題には字数ぶんのマス目、選択問題には選択肢と記号の欄、計算問題には式を書く欄を付ける。
 
 使い方:
     python3 build_print.py print.json out/print.pdf [--font-dir fonts]
@@ -30,7 +30,8 @@ FONT_FILES = {BODY: "ipagp.ttf", MONO: "ipag.ttf"}
 MARGIN = 20 * mm
 CELL = 7 * mm        # マス目1つの大きさ
 PER_ROW = 20         # マス目の1行の字数
-QUESTION_TYPES = ("short", "essay")
+QUESTION_TYPES = ("short", "essay", "choice", "calc")
+CHOICE_LABELS = "アイウエオカ"  # 選択肢の記号。選択肢は2〜6個
 
 FONT_DIRS = [
     "fonts",
@@ -97,7 +98,21 @@ def _check_question(n, q, seen):
             errors.append(f"問 {label}: 「{key}」がありません")
     qtype = q.get("type")
     if qtype not in QUESTION_TYPES:
-        errors.append(f"問 {label}: 「type」は short か essay にしてください（今の値: {qtype!r}）")
+        errors.append(
+            f"問 {label}: 「type」は short・essay・choice・calc のどれかにしてください（今の値: {qtype!r}）"
+        )
+    elif qtype == "choice":
+        choices = q.get("choices")
+        if (not isinstance(choices, list) or not 2 <= len(choices) <= len(CHOICE_LABELS)
+                or not all(_is_text(c) for c in choices)):
+            errors.append(
+                f"問 {label}: 選択問題には選択肢（choices）が2〜{len(CHOICE_LABELS)}個必要です"
+            )
+        elif _is_text(q.get("answer")) and q["answer"] not in CHOICE_LABELS[:len(choices)]:
+            errors.append(
+                f"問 {label}: 選択問題の答えは記号で書いてください"
+                f"（{CHOICE_LABELS[0]}〜{CHOICE_LABELS[len(choices) - 1]}。今の値: {q['answer']!r}）"
+            )
     elif qtype == "essay":
         chars = q.get("chars")
         if not isinstance(chars, int) or isinstance(chars, bool) or chars <= 0:
@@ -113,6 +128,7 @@ def validate(data):
     """入力の問題点を文のリストで返す。空なら問題なし。
 
     必須: title, trend, strategy, questions（各問は id, type, text, answer, explanation）
+    型ごとに必要: essay は chars、choice は choices（答えは記号）
     任意: subject, scope
     """
     if not isinstance(data, dict):
@@ -183,6 +199,24 @@ class AnswerBox(Flowable):
         c.drawString(1.5 * mm, self.h - 3.5 * mm, "答え")
 
 
+class WorkBox(Flowable):
+    """計算問題用の、式と計算を書く欄。"""
+
+    def __init__(self, width=A4[0] - 2 * MARGIN - 9 * mm, height=32 * mm):
+        super().__init__()
+        self.w, self.h = width, height
+
+    def wrap(self, avail_w, avail_h):
+        return self.w, self.h + 2 * mm
+
+    def draw(self):
+        c = self.canv
+        c.setLineWidth(0.6)
+        c.rect(0, 2 * mm, self.w, self.h)
+        c.setFont(BODY, 8)
+        c.drawString(1.5 * mm, self.h - 1.5 * mm, "式・計算")
+
+
 def make_styles():
     base = dict(fontName=BODY, wordWrap="CJK")
     body = ParagraphStyle("body", fontSize=10.5, leading=17, **base)
@@ -218,11 +252,30 @@ def bullet_section(heading, lines, st):
     return [para(heading, st["head"])] + [para(f"・{t}", st["item"]) for t in lines]
 
 
+def answer_area(q, st):
+    """問題の型ごとの、答えを書く所。"""
+    if q["type"] == "essay":
+        return [MasuGrid(q["chars"])]
+    if q["type"] == "choice":
+        options = [para(f"{CHOICE_LABELS[i]}　{c}", st["indent"]) for i, c in enumerate(q["choices"])]
+        return options + [Spacer(1, 2 * mm), AnswerBox(width=30 * mm)]
+    if q["type"] == "calc":
+        return [WorkBox(), AnswerBox()]
+    return [AnswerBox()]
+
+
+def answer_text(q):
+    """解答欄に載せる答え。選択問題は、記号に選択肢の文を添える。"""
+    if q["type"] == "choice":
+        return f"{q['answer']}（{q['choices'][CHOICE_LABELS.index(q['answer'])]}）"
+    return q["answer"]
+
+
 def question_section(questions, st):
     story = [para("3　問題", st["head"])]
     for q in questions:
         story.append(para(f"【{q['id']}】 {q['text']}", st["question"]))
-        story.append(MasuGrid(q["chars"]) if q["type"] == "essay" else AnswerBox())
+        story += answer_area(q, st)
         story.append(Spacer(1, 2 * mm))
     return story
 
@@ -230,7 +283,7 @@ def question_section(questions, st):
 def answer_section(questions, st):
     story = [para("4　解答と解説", st["head"])]
     for q in questions:
-        story.append(para(f"【{q['id']}】 答え：{q['answer']}", st["question"]))
+        story.append(para(f"【{q['id']}】 答え：{answer_text(q)}", st["question"]))
         story.append(para(q["explanation"], st["indent"]))
     return story
 

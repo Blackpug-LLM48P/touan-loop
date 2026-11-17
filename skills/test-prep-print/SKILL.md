@@ -24,10 +24,10 @@ touan-loop を clone したフォルダの直下で作業する。`data/` と `o
 ## 手順
 
 1. 入力を読み、何を練習させるプリントかを一文で決めて親に伝える。問題数や難しさの希望がなければ、問題1ページ＋解答1ページ（3〜5問）で作る。
-2. `print.json` を作る（形は下）。
+2. `print.json` を作る（形は下）。置き場所は回ごとのフォルダ（例：`data/2026-11-rika/print.json`）。同じ回に2枚目を作るときは、`print-2.json` のように名前を分ける。
 3. PDFを作る。スクリプトは、このスキルのフォルダの `scripts/build_print.py`。
    ```
-   python3 skills/test-prep-print/scripts/build_print.py data/print.json out/print.pdf
+   python3 skills/test-prep-print/scripts/build_print.py data/2026-11-rika/print.json out/2026-11-rika.pdf
    ```
    スキルを別の場所（例：`~/.claude/skills/`）にコピーして使っているときは、スクリプトのパスだけをコピー先のものに替える（例：`~/.claude/skills/test-prep-print/scripts/build_print.py`）。`data/` と `out/` は替えない。
 4. できたPDFを画像にして全ページを見る（例：`pdftoppm -r 80 -png out/print.pdf out/page`）。文字の欠け、はみ出し、マス目の字数を確かめる。
@@ -41,7 +41,10 @@ touan-loop を clone したフォルダの直下で作業する。`data/` と `o
 - 問題文は教科書や問題集を写さない。数値や場面は自分で作る。
 - 計算問題は、解答を別の方法で検算してから載せる。
 - テスト前（答案がない）のプリントでは、「傾向」に本人の弱点を作って書かない。その範囲でよく問われることを書く。
-- テスト後のプリントでは、`cause.status` が `confirmed` の原因だけを出題の根拠にする。`hypothesis` と `unknown` は「親に確かめてほしい点」として別に伝える。
+- テスト後のプリントでは、`cause.status` が `confirmed` か `parent_confirmed` の原因だけを出題の根拠にする。`hypothesis` と `unknown` は「親に確かめてほしい点」として別に伝える。
+- 問題の型は、答案で落とした問の型に合わせる（選択で落としたなら選択、途中式で落としたなら計算）。
+- 選択問題の選択肢は2〜6個。正解は1つだけにし、どの選択肢がなぜ違うかを解説に書く。
+- 計算問題の解説には、式を1行ずつ書く。
 - 白黒印刷で読めること。色で区別しない。
 
 ## print.json の形
@@ -55,15 +58,21 @@ touan-loop を clone したフォルダの直下で作業する。`data/` と `o
   "strategy": ["答えを書いたら、最後に単位を指でさして確かめる。"],
   "questions": [
     {"id": "1", "type": "short", "text": "…", "answer": "…", "explanation": "…"},
-    {"id": "2", "type": "essay", "chars": 25, "text": "…", "answer": "…", "explanation": "…"}
+    {"id": "2", "type": "essay", "chars": 25, "text": "…", "answer": "…", "explanation": "…"},
+    {"id": "3", "type": "choice", "choices": ["…", "…", "…"], "text": "…", "answer": "イ", "explanation": "…"},
+    {"id": "4", "type": "calc", "text": "…", "answer": "…", "explanation": "…"}
   ]
 }
 ```
 
 - 必須：`title`、`trend`、`strategy`、`questions`。各問は `id`（文字）、`type`、`text`、`answer`、`explanation`
 - 任意：`subject`、`scope`
-- `type`：`short`（答え欄）／`essay`（マス目。`chars` が必要）。これ以外の値は受けつけない
-- スクリプトは、必須項目の欠け・`type` の誤り・問題番号の重なり・模範解答の字数オーバーを見つけると、PDFを作らずに止まる。
+- `type`（これ以外の値は受けつけない）
+  - `short`：答え欄
+  - `essay`：マス目。`chars`（字数）が必要
+  - `choice`：選択肢と、記号を書く欄。`choices`（2〜6個）が必要。記号はスクリプトが ア・イ・ウ… と付けるので、選択肢の文には記号を書かない。`answer` は記号（例：`"イ"`）
+  - `calc`：式と計算を書く欄と、答え欄
+- スクリプトは、必須項目の欠け・`type` の誤り・問題番号の重なり・模範解答の字数オーバー・選択肢の不足・選択問題の答えが記号でないことを見つけると、PDFを作らずに止まる。
 
 ## フォント
 
